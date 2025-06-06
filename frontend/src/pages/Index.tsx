@@ -387,9 +387,9 @@ const Index = () => {
   }
 
   const formatResponses = (answers: Answer[]) => {
-    console.log("Formatting answers:", answers); // Debug log
+    console.log("Formatting answers:", answers);
 
-    const formattedResponses: { [key: string]: string | number } = {};
+    const formattedResponses: { [key: string]: number | string } = {};
 
     answers.forEach((answer) => {
       // Skip empty answers
@@ -398,37 +398,36 @@ const Index = () => {
       const question = surveyQuestions.find((q) => q.id === answer.questionId);
       if (!question) return;
 
-      if (question.type === "multi-select" && answer.answer.includes(",")) {
-        // Handle multi-select answers as separate numbered fields
+      if (question.type === "multi-select") {
+        // Parse selected option names from comma-separated string
         const selectedNames = answer.answer
           .split(",")
           .map((ans) => ans.trim())
           .filter((ans) => ans);
 
-        selectedNames.forEach((name, index) => {
-          const option = question.options?.find((opt) => opt.name === name);
-          if (option) {
-            formattedResponses[`q${answer.questionId}_${index + 1}`] =
-              option.value;
-          }
+        // For each option in question.options, set 1 if selected, else 0
+        question.options?.forEach((option) => {
+          const key = `q${question.id}_${option.value}`;
+          formattedResponses[key] = selectedNames.includes(option.name) ? 1 : 0;
         });
       } else if (question.options) {
-        // For multiple choice questions, save the value instead of the name
+        // For multiple choice, store the option value
         const option = question.options.find(
           (opt) => opt.name === answer.answer.trim()
         );
         if (option) {
-          formattedResponses[`q${answer.questionId}`] = option.value;
+          formattedResponses[`q${question.id}`] = option.value;
         }
       } else {
-        // For text and rating questions, save as is
-        formattedResponses[`q${answer.questionId}`] = answer.answer.trim();
+        // For text and rating questions, store answer as-is
+        formattedResponses[`q${question.id}`] = answer.answer.trim();
       }
     });
 
-    console.log("Formatted responses:", formattedResponses); // Debug log
+    console.log("Formatted responses:", formattedResponses);
     return formattedResponses;
   };
+
 
   const saveIncompleteResponse = async () => {
     const formattedResponses = formatResponses(answers);
