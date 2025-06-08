@@ -13,6 +13,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { SurveyQuestion } from "@/components/SurveyQuestion";
 import { VoiceService } from "@/services/VoiceService";
+import config from '@/config';
 
 interface Option {
   value: number;
@@ -453,7 +454,7 @@ const Index = () => {
     }
 
     try {
-      const res = await fetch("http://localhost:5000/api/survey/save", {
+      const res = await fetch(`${config.API_BASE_URL}/api/survey/save`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -502,7 +503,7 @@ const Index = () => {
     console.log("Submitting payload:", payload);
 
     try {
-      const res = await fetch("http://localhost:5000/api/survey/save", {
+      const res = await fetch(`${config.API_BASE_URL}/api/survey/save`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
