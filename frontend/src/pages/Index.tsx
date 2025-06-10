@@ -13,7 +13,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { SurveyQuestion } from "@/components/SurveyQuestion";
 import { VoiceService } from "@/services/VoiceService";
-import config from '@/config';
+import config from "@/config";
 import { ThankYou } from "@/components/ThankYou";
 
 interface Option {
@@ -23,7 +23,7 @@ interface Option {
 
 interface Question {
   id: string;
-  type: "text" | "multiple-choice" | "multi-select" | "rating";
+  type: "text" | "single-select" | "multi-select" | "rating";
   question: string;
   options?: Option[];
   required: boolean;
@@ -43,7 +43,7 @@ const surveyQuestions: Question[] = [
   },
   {
     id: "2",
-    type: "multiple-choice",
+    type: "single-select",
     question: "How would you rate your overall experience with our service?",
     options: [
       { value: 1, name: "Excellent" },
@@ -56,9 +56,15 @@ const surveyQuestions: Question[] = [
   },
   {
     id: "3",
-    type: "rating",
-    question:
-      "On a scale of 1 to 10, how likely are you to recommend us to a friend?",
+    type: "single-select",
+    question: "How satisfied are you with our customer service?",
+    options: [
+      { value: 1, name: "Very Dissatisfied" },
+      { value: 2, name: "Dissatisfied" },
+      { value: 3, name: "Neutral" },
+      { value: 4, name: "Satisfied" },
+      { value: 5, name: "Very Satisfied" },
+    ],
     required: true,
   },
   {
@@ -83,7 +89,7 @@ const surveyQuestions: Question[] = [
   },
   {
     id: "6",
-    type: "multiple-choice",
+    type: "single-select",
     question: "How did you hear about us?",
     options: [
       { value: 1, name: "Social Media" },
@@ -107,6 +113,7 @@ const Index = () => {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [voiceService] = useState(() => new VoiceService());
   const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
+  const [isVoiceSupported, setIsVoiceSupported] = useState(true);
   const { toast } = useToast();
   const [showThankYou, setShowThankYou] = useState(false);
 
@@ -123,6 +130,21 @@ const Index = () => {
   useEffect(() => {
     // Initialize voice service
     voiceService.initialize();
+
+    // Check voice support on component mount
+    const isSupported = voiceService.isSupported();
+    setIsVoiceSupported(isSupported);
+    setIsVoiceEnabled(isSupported);
+
+    if (!isSupported) {
+      toast({
+        title: "Voice Features Not Available",
+        description:
+          "Please ensure you've granted microphone permissions and are using a supported browser (Chrome or Safari).",
+        variant: "default",
+        duration: 6000,
+      });
+    }
 
     return () => {
       voiceService.stopListening();
@@ -169,7 +191,7 @@ const Index = () => {
 
       // Add options for multiple choice and multi-select questions
       if (
-        (currentQuestion.type === "multiple-choice" ||
+        (currentQuestion.type === "single-select" ||
           currentQuestion.type === "multi-select") &&
         currentQuestion.options
       ) {
@@ -188,16 +210,31 @@ const Index = () => {
           ". Please rate from 1 to 10, where 1 is not likely and 10 is very likely.";
       }
 
+      // Initialize speech synthesis with user interaction
+      if (!window.speechSynthesis.speaking) {
+        // Create a short utterance to initialize speech synthesis
+        const init = new SpeechSynthesisUtterance("");
+        window.speechSynthesis.speak(init);
+      }
+
       await voiceService.speak(textToRead);
     } catch (error) {
-      console.error("Error reading question:", error);
-      // Only show error toast if it's a real error, not just an end event
-      if (error instanceof Error && error.message !== "Speech ended") {
+      // Only show error toast for critical speech synthesis errors
+      if (
+        error instanceof Error &&
+        error.message.startsWith("Speech error:") &&
+        !error.message.includes("interrupted") &&
+        !error.message.includes("not-allowed")
+      ) {
+        console.error("Critical speech error:", error);
         toast({
           title: "Voice Error",
           description: "Could not read the question aloud.",
           variant: "destructive",
         });
+      } else {
+        // Log non-critical errors for debugging but don't show toast
+        console.log("Non-critical speech event:", error);
       }
     } finally {
       setIsSpeaking(false);
@@ -206,96 +243,119 @@ const Index = () => {
 
   // Function to match voice input to multiple choice options
   const matchVoiceToOption = (voiceInput: string): string => {
-    if (!currentQuestion.options && currentQuestion.type !== "rating") {
+    if (!currentQuestion.options) {
+      return voiceInput;
+    }
+
+    // For rating questions (1-10), convert words to numbers and validate
+    if (currentQuestion.type === "rating") {
+      const normalizedInput = voiceInput.toLowerCase().trim();
+
+      // Word to number mapping
+      const wordToNumber: { [key: string]: string } = {
+        one: "1",
+        first: "1",
+        two: "2",
+        second: "2",
+        three: "3",
+        third: "3",
+        four: "4",
+        fourth: "4",
+        five: "5",
+        fifth: "5",
+        six: "6",
+        sixth: "6",
+        seven: "7",
+        seventh: "7",
+        eight: "8",
+        eighth: "8",
+        nine: "9",
+        ninth: "9",
+        ten: "10",
+        tenth: "10",
+      };
+
+      // Try to match word numbers first
+      for (const [word, num] of Object.entries(wordToNumber)) {
+        if (normalizedInput.includes(word)) {
+          return num;
+        }
+      }
+
+      // Try to match digits (including variations like "number 5" or "rating 8")
+      const numberMatch = normalizedInput.match(/\b(\d+)\b/);
+      if (numberMatch) {
+        const number = parseInt(numberMatch[1]);
+        if (number >= 1 && number <= 10) {
+          return number.toString();
+        }
+      }
+
       return voiceInput;
     }
 
     const normalizedInput = voiceInput.toLowerCase().trim();
-    console.log(
-      "Matching voice input:",
-      normalizedInput,
-      "to options:",
-      currentQuestion.options
-    );
 
-    // For multi-select, handle multiple selections separated by "and"
+    // For multi-select questions, handle multiple selections
     if (currentQuestion.type === "multi-select" && currentQuestion.options) {
       const inputParts = normalizedInput.split(/\s+and\s+|\s*,\s*/);
       const matchedOptions: string[] = [];
 
       inputParts.forEach((part) => {
         const trimmedPart = part.trim();
-
-        // Find exact match
-        const exactMatch = currentQuestion.options?.find(
-          (option) => option.name.toLowerCase() === trimmedPart
-        );
-        if (exactMatch && !matchedOptions.includes(exactMatch.name)) {
-          matchedOptions.push(exactMatch.name);
-          return;
-        }
-
-        // Find partial match
-        const partialMatch = currentQuestion.options?.find(
+        const match = currentQuestion.options?.find(
           (option) =>
+            option.name.toLowerCase() === trimmedPart ||
             option.name.toLowerCase().includes(trimmedPart) ||
             trimmedPart.includes(option.name.toLowerCase())
         );
-        if (partialMatch && !matchedOptions.includes(partialMatch.name)) {
-          matchedOptions.push(partialMatch.name);
+        if (match && !matchedOptions.includes(match.name)) {
+          matchedOptions.push(match.name);
         }
       });
 
-      if (matchedOptions.length > 0) {
-        console.log("Multi-select matches found:", matchedOptions);
-        return matchedOptions.join(",");
-      }
+      return matchedOptions.length > 0 ? matchedOptions.join(",") : voiceInput;
     }
 
     // For single select questions
-    if (currentQuestion.type === "multiple-choice" && currentQuestion.options) {
-      // Find exact match (case insensitive)
+    if (currentQuestion.type === "single-select" && currentQuestion.options) {
+      // Try exact match first
       const exactMatch = currentQuestion.options.find(
         (option) => option.name.toLowerCase() === normalizedInput
       );
       if (exactMatch) {
-        console.log("Exact match found:", exactMatch.name);
         return exactMatch.name;
       }
 
-      // Find partial match
+      // Try partial match if no exact match found
       const partialMatch = currentQuestion.options.find(
         (option) =>
           option.name.toLowerCase().includes(normalizedInput) ||
           normalizedInput.includes(option.name.toLowerCase())
       );
       if (partialMatch) {
-        console.log("Partial match found:", partialMatch.name);
         return partialMatch.name;
       }
     }
 
-    // For rating questions
-    if (currentQuestion.type === "rating") {
-      const numberMatch = voiceInput.match(/\b(\d+)\b/);
-      if (numberMatch) {
-        const number = parseInt(numberMatch[1]);
-        if (number >= 1 && number <= 10) {
-          console.log("Number extracted for rating:", number);
-          return number.toString();
-        }
-      }
-    }
-
-    console.log("No match found, returning original input:", voiceInput);
     return voiceInput;
   };
 
   const startVoiceRecording = async () => {
     if (!isVoiceEnabled) {
       toast({
-        title: "Voice Disabled",
+        title: "Voice Features Disabled",
         description: "Please enable voice features to use voice recording.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!isVoiceSupported) {
+      toast({
+        title: "Browser Support Issue",
+        description:
+          "Please ensure you've granted microphone permissions and are using a supported browser.",
         variant: "destructive",
       });
       return;
@@ -303,39 +363,91 @@ const Index = () => {
 
     setIsListening(true);
     try {
-      const transcript = await voiceService.startListening();
-      if (transcript) {
-        const matchedAnswer = matchVoiceToOption(transcript);
+      const result = await voiceService.startListening();
+      if (result) {
+        const matchedAnswer = matchVoiceToOption(result);
+
+        // Check if a valid option was selected
+        let isValidAnswer = false;
+        if (
+          currentQuestion.type === "single-select" &&
+          currentQuestion.options
+        ) {
+          isValidAnswer = currentQuestion.options.some(
+            (opt) => opt.name === matchedAnswer
+          );
+        } else if (
+          currentQuestion.type === "multi-select" &&
+          currentQuestion.options
+        ) {
+          const selectedOptions = matchedAnswer
+            .split(",")
+            .map((opt) => opt.trim());
+          isValidAnswer = selectedOptions.some((selected) =>
+            currentQuestion.options?.some((opt) => opt.name === selected)
+          );
+        } else if (currentQuestion.type === "text") {
+          isValidAnswer = matchedAnswer.trim() !== "";
+        }
+
         handleAnswerChange(matchedAnswer);
-        toast({
-          title: "Voice Recorded",
-          description: "Your response has been captured successfully.",
-        });
+
+        if (isValidAnswer) {
+          toast({
+            title: "Voice Recorded",
+            description: "Your response has been captured successfully.",
+          });
+        } else if (currentQuestion.type !== "text") {
+          toast({
+            title: "No Valid Option Selected",
+            description: "Please try again with one of the available options.",
+            variant: "destructive",
+          });
+        }
       }
     } catch (error) {
       console.error("Error recording voice:", error);
       let errorMessage = "Could not record your voice. Please try again.";
 
       if (error instanceof Error) {
-        switch (error.message) {
-          case "No speech detected":
-            errorMessage = "No speech was detected. Please try speaking again.";
-            break;
-          case "Could not transcribe audio":
-            errorMessage =
-              "Could not understand the audio. Please try speaking more clearly.";
-            break;
-          case "No microphone detected":
-            errorMessage =
-              "No microphone found. Please check your microphone connection.";
-            break;
-          case "Microphone access denied":
-            errorMessage =
-              "Microphone access was denied. Please allow microphone access in your browser settings.";
-            break;
-          case "Recording stopped":
-            // Don't show error toast for normal stopping
-            return;
+        const errorLower = error.message.toLowerCase();
+
+        if (
+          errorLower.includes("permission") ||
+          errorLower.includes("denied")
+        ) {
+          errorMessage =
+            "Microphone access was denied. Please check your browser settings and make sure microphone permissions are enabled.";
+        } else if (
+          errorLower.includes("not found") ||
+          errorLower.includes("no microphone")
+        ) {
+          errorMessage =
+            "No microphone found. Please check your device settings and ensure a microphone is available.";
+        } else if (
+          errorLower.includes("not supported") ||
+          errorLower.includes("mimetype")
+        ) {
+          errorMessage =
+            "Your browser doesn't support the required audio format. Please try using Chrome or Firefox.";
+        } else if (
+          errorLower.includes("in use") ||
+          errorLower.includes("already")
+        ) {
+          errorMessage =
+            "Microphone is being used by another application. Please close other apps that might be using the microphone.";
+        } else if (
+          errorLower.includes("secure") ||
+          errorLower.includes("ssl")
+        ) {
+          errorMessage =
+            "Voice recording requires a secure connection. Please ensure you're using HTTPS.";
+        } else if (errorLower.includes("timeout")) {
+          errorMessage =
+            "Recording timed out. Please try speaking more quickly after pressing the record button.";
+        } else if (errorLower.includes("network")) {
+          errorMessage =
+            "A network error occurred. Please check your internet connection.";
         }
       }
 
@@ -343,6 +455,7 @@ const Index = () => {
         title: "Recording Error",
         description: errorMessage,
         variant: "destructive",
+        duration: 6000,
       });
     } finally {
       setIsListening(false);
@@ -366,11 +479,6 @@ const Index = () => {
   };
 
   const handleAnswerChange = (answer: string) => {
-    console.log("Handling answer change:", {
-      questionId: currentQuestion.id,
-      answer,
-    }); // Debug log
-
     const existingAnswerIndex = answers.findIndex(
       (a) => a.questionId === currentQuestion.id
     );
@@ -383,8 +491,6 @@ const Index = () => {
     } else {
       setAnswers([...answers, newAnswer]);
     }
-
-    console.log("Updated answers state:", [...answers, newAnswer]); // Debug log
   };
 
   const getCurrentAnswer = () => {
@@ -393,18 +499,33 @@ const Index = () => {
     );
   };
 
-  const canProceed = () => {
+const canProceed = () => {
     const currentAnswer = getCurrentAnswer();
     if (!currentQuestion.required) return true;
-
+ 
     // For multi-select questions, check if at least one option is selected
     if (currentQuestion.type === "multi-select") {
-      return currentAnswer.trim() !== "";
+      if (!currentAnswer.trim()) return false;
+ 
+      const selectedOptions = currentAnswer.split(",").map((opt) => opt.trim());
+      // Check if at least one valid option from the available options is selected
+      return selectedOptions.some((selected) =>
+        currentQuestion.options?.some((opt) => opt.name === selected)
+      );
     }
-
+ 
+    // For single-select questions, ensure a valid option is selected
+    if (currentQuestion.type === "single-select") {
+      const selectedOption = currentQuestion.options?.find(
+        (opt) => opt.name === currentAnswer.trim()
+      );
+      return !!selectedOption;
+    }
+ 
+    // For text and rating questions, ensure non-empty answer
     return currentAnswer.trim() !== "";
   };
-
+  
   function generateUUID(): string {
     // Generates a UUID v4
     return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
@@ -599,6 +720,11 @@ const Index = () => {
     }
   };
 
+  const handleStopSpeaking = () => {
+    voiceService.stopSpeaking();
+    setIsSpeaking(false);
+  };
+
   if (showThankYou) {
     return <ThankYou onStartNewSurvey={handleStartNewSurvey} />;
   }
@@ -664,6 +790,7 @@ const Index = () => {
             onStopRecording={stopVoiceRecording}
             voiceEnabled={isVoiceEnabled}
             isSpeaking={isSpeaking}
+            onStopSpeaking={handleStopSpeaking}
           />
         </Card>
 
