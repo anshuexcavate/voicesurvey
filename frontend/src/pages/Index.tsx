@@ -531,10 +531,10 @@ const Index = () => {
     );
   };
 
-const canProceed = () => {
+  const canProceed = () => {
     const currentAnswer = getCurrentAnswer();
     if (!currentQuestion.required) return true;
- 
+
     // For multi-select questions, check if at least one option is selected
     if (currentQuestion.type === "multi-select") {
       if (!currentAnswer.trim()) return false;
@@ -544,7 +544,7 @@ const canProceed = () => {
         currentQuestion.options?.some((opt) => opt.name === selected)
       );
     }
- 
+
     // For single-select questions, ensure a valid option is selected
     if (currentQuestion.type === "single-select") {
       const selectedOption = currentQuestion.options?.find(
@@ -552,11 +552,11 @@ const canProceed = () => {
       );
       return !!selectedOption;
     }
- 
+
     // For text and rating questions, ensure non-empty answer
     return currentAnswer.trim() !== "";
   };
-  
+
   function generateUUID(): string {
     // Generates a UUID v4
     return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
@@ -1211,29 +1211,32 @@ const canProceed = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="relative w-full">
-        <div className="absolute left-0 top-0 pl-8 pt-4">
-          <img src="/logo.png" alt="Survey Logo" className="h-16 w-auto" />
+        {/* Header with logo on left, title in center */}
+        <div className="flex items-center justify-between px-4 pt-4 max-w-6xl w-full">
+          {/* Left: Logo */}
+          <div className="flex-shrink-0">
+            <img src="/logo.png" alt="Survey Logo" className="h-16 w-auto" />
+          </div>
         </div>
+
+        {/* Main Content */}
         <div className="max-w-2xl mx-auto px-4 pt-4 pb-1">
           {currentQuestionIndex === -1 ? (
             renderWelcomeScreen()
           ) : (
             <>
-              <div className="mb-8 text-center">
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                  Voice Survey
-                </h1>
+              {/* Progress */}
+              {/* Center: Title and Subtitle */}
+              <div className="flex-1 text-center mb-6">
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">Voice Survey</h1>
                 <p className="text-gray-600">
                   Answer questions using your voice or keyboard
                 </p>
               </div>
-
-              {/* Progress */}
               <div className="mb-8">
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-sm text-gray-600">
-                    Question {currentQuestionIndex + 1} of{" "}
-                    {surveyQuestions.length}
+                    Question {currentQuestionIndex + 1} of {surveyQuestions.length}
                   </span>
                   <span className="text-sm text-gray-600">
                     {Math.round(progress)}% Complete
