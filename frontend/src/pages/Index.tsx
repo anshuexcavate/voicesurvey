@@ -68,16 +68,52 @@ const surveyQuestions: Question[] = [
     required: true,
   },
   {
-    id: "4",
-    type: "multi-select",
-    question:
-      "Which of the following features do you find most valuable? (Select all that apply)",
+    id: "4_1",
+    type: "single-select",
+    question: "Do you find Customer Support valuable?",
     options: [
-      { value: 1, name: "Customer Support" },
-      { value: 2, name: "Easy to Use" },
-      { value: 3, name: "Good Value" },
-      { value: 4, name: "Fast Delivery" },
-      { value: 5, name: "Quality Products" },
+      { value: 1, name: "Yes" },
+      { value: 0, name: "No" },
+    ],
+    required: true,
+  },
+  {
+    id: "4_2",
+    type: "single-select",
+    question: "Do you find Easy to Use valuable?",
+    options: [
+      { value: 1, name: "Yes" },
+      { value: 0, name: "No" },
+    ],
+    required: true,
+  },
+  {
+    id: "4_3",
+    type: "single-select",
+    question: "Do you find Good Value valuable?",
+    options: [
+      { value: 1, name: "Yes" },
+      { value: 0, name: "No" },
+    ],
+    required: true,
+  },
+  {
+    id: "4_4",
+    type: "single-select",
+    question: "Do you find Fast Delivery valuable?",
+    options: [
+      { value: 1, name: "Yes" },
+      { value: 0, name: "No" },
+    ],
+    required: true,
+  },
+  {
+    id: "4_5",
+    type: "single-select",
+    question: "Do you find Quality Products valuable?",
+    options: [
+      { value: 1, name: "Yes" },
+      { value: 0, name: "No" },
     ],
     required: true,
   },
